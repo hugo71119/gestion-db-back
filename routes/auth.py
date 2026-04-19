@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify, session
+from flask_jwt_extended import create_access_token
 import pyodbc
 from config import CONNECTION_STRING
 
@@ -10,8 +11,8 @@ def get_conn():
 @auth_bp.route('/login', methods=['POST'])
 def login():
     data = request.get_json()
-    tipo      = data.get('tipo', '')
-    usuario   = data.get('usuario', '')
+    tipo       = data.get('tipo', '')
+    usuario    = data.get('usuario', '')
     contrasena = data.get('contrasena', '')
 
     if not tipo or not usuario or not contrasena:
@@ -50,14 +51,29 @@ def login():
             )
             row = cursor.fetchone()
             if row:
+                cliente_id = row[0]
+                nombre     = row[1]
+
+                # Sesión web
                 session['usuario']    = usuario
                 session['rol']        = 'cliente'
-                session['cliente_id'] = row[0]
+                session['cliente_id'] = cliente_id
+
+                # JWT para el agente n8n / ElevenLabs
+                access_token = create_access_token(
+                identity=str(cliente_id),
+                additional_claims={
+                    'cliente_id': cliente_id,
+                    'rol': 'cliente',
+                    'nombre': nombre
+                })
+            
                 return jsonify({
-                    'mensaje':    'Login exitoso',
-                    'rol':        'cliente',
-                    'cliente_id': row[0],
-                    'nombre':     row[1]
+                    'mensaje':      'Login exitoso',
+                    'rol':          'cliente',
+                    'cliente_id':   cliente_id,
+                    'nombre':       nombre,
+                    'access_token': access_token
                 })
             return jsonify({'error': 'Cliente no encontrado'}), 401
 
